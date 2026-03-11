@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TANX</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #111; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+
+    #hud {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; color: #fff;
+    }
+
+    #health-bar {
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 12px; background: #333; border: 1px solid #666;
+    }
+    #health-fill {
+      height: 100%; width: 100%; background: #4f4; transition: width 0.15s;
+    }
+    #shield-bar {
+      position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%);
+      width: 200px; height: 6px; background: #333; border: 1px solid #444;
+    }
+    #shield-fill {
+      height: 100%; width: 0%; background: #48f; transition: width 0.15s;
+    }
+
+    #scores {
+      position: absolute; top: 10px; right: 10px;
+      font-size: 13px; line-height: 1;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 8px 4px;
+      min-width: 140px;
+      backdrop-filter: blur(4px);
+    }
+    #scores-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+      color: rgba(255, 255, 255, 0.4);
+      text-align: center; padding: 2px 0 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 4px;
+    }
+    #scores-list {
+      position: relative;
+    }
+    .team-score {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 10px; margin: 2px 0; border-radius: 4px;
+      font-weight: bold; letter-spacing: 0.5px;
+      position: absolute; left: 0; right: 0;
+      transition: top 0.4s ease;
+    }
+    .team-score .team-name { opacity: 0.9; }
+    .team-score .team-pts {
+      font-size: 15px;
+      min-width: 24px; text-align: right;
+    }
+    .team-0 { color: #ff6666; background: rgba(255, 68, 68, 0.12); }
+    .team-1 { color: #66aaff; background: rgba(68, 136, 255, 0.12); }
+    .team-2 { color: #66ff66; background: rgba(68, 255, 68, 0.12); }
+    .team-3 { color: #ffff66; background: rgba(255, 255, 68, 0.12); }
+
+
+    #death-screen {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 24px; color: #f44; display: none; text-align: center;
+    }
+
+    #winner-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: none; align-items: center; justify-content: center;
+      z-index: 10; overflow: hidden;
+    }
+    #winner-screen.ready, #winner-screen.exit { display: flex; }
+
+    /* Screen tint */
+    #winner-tint {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #winner-screen.active #winner-tint { opacity: 1; }
+    #winner-screen.exit #winner-tint {
+      opacity: 0;
+      transition: opacity 0.5s ease 0.2s;
+    }
+
+    /* Main stripe */
+    #winner-stripe {
+      position: absolute; left: -10%; width: 120%; height: 110px;
+      transform: rotate(-3deg) scaleX(0);
+      transform-origin: left center;
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #winner-screen.active #winner-stripe {
+      transform: rotate(-3deg) scaleX(1);
+    }
+    #winner-screen.exit #winner-stripe {
+      transform: rotate(-3deg) scaleX(0);
+      transform-origin: right center;
+      transition: transform 0.35s cubic-bezier(0.55, 0, 1, 0.45) 0.15s;
+    }
+
+    /* Thin accent lines above and below */
+    #winner-line-top, #winner-line-bot {
+      position: absolute; left: -10%; width: 120%; height: 3px;
+      transform: rotate(-3deg) scaleX(0);
+      transform-origin: right center;
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
+    }
+    #winner-line-top { margin-top: -62px; }
+    #winner-line-bot { margin-top: 62px; }
+    #winner-screen.active #winner-line-top,
+    #winner-screen.active #winner-line-bot {
+      transform: rotate(-3deg) scaleX(1);
+    }
+    #winner-screen.exit #winner-line-top,
+    #winner-screen.exit #winner-line-bot {
+      transform: rotate(-3deg) scaleX(0);
+      transform-origin: left center;
+      transition: transform 0.3s cubic-bezier(0.55, 0, 1, 0.45) 0.05s;
+    }
+
+    /* Text container */
+    #winner-banner {
+      position: relative; z-index: 1;
+      text-align: center;
+    }
+    #winner-label {
+      font-size: 80px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 10px;
+      text-shadow: 0 2px 30px rgba(0,0,0,0.7), 0 0 60px rgba(0,0,0,0.3);
+      opacity: 0;
+      transform: translateX(-80px) scale(1.1);
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s,
+                  opacity 0.3s ease 0.12s;
+    }
+    #winner-screen.active #winner-label {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+    #winner-screen.exit #winner-label {
+      opacity: 0;
+      transform: translateX(80px) scale(0.95);
+      transition: transform 0.3s cubic-bezier(0.55, 0, 1, 0.45),
+                  opacity 0.2s ease;
+    }
+
+    #winner-team {
+      font-size: 18px; letter-spacing: 6px; text-transform: uppercase;
+      margin-top: 6px;
+      text-shadow: 0 1px 10px rgba(0,0,0,0.5);
+      opacity: 0;
+      transform: translateX(60px);
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.22s,
+                  opacity 0.3s ease 0.22s;
+    }
+    #winner-screen.active #winner-team {
+      opacity: 0.9;
+      transform: translateX(0);
+    }
+    #winner-screen.exit #winner-team {
+      opacity: 0;
+      transform: translateX(-60px);
+      transition: transform 0.3s cubic-bezier(0.55, 0, 1, 0.45) 0.05s,
+                  opacity 0.2s ease 0.05s;
+    }
+
+    #ammo-display {
+      position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; color: #f84;
+    }
+
+    #connect-status {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 18px; color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="connect-status">Connecting...</div>
+
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="shield-bar"><div id="shield-fill"></div></div>
+    <div id="ammo-display"></div>
+    <div id="scores">
+      <div id="scores-title">Leaderboard</div>
+      <div id="scores-list"></div>
+    </div>
+    <div id="death-screen">DESTROYED<br><span style="font-size:14px;color:#aaa">Respawning...</span></div>
+    <div id="winner-screen">
+      <div id="winner-tint"></div>
+      <div id="winner-stripe"></div>
+      <div id="winner-line-top"></div>
+      <div id="winner-line-bot"></div>
+      <div id="winner-banner">
+        <div id="winner-label"></div>
+        <div id="winner-team"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
