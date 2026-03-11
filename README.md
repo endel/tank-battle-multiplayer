@@ -1,4 +1,4 @@
-# Tanx
+# Tank Battle Multiplayer
 
 A multiplayer tank battle game built with [Colyseus](https://colyseus.io/) and [Three.js](https://threejs.org/).
 
