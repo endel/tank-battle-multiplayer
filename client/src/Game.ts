@@ -94,8 +94,10 @@ export class Game {
     // Sound
     this.sound = new Sound();
 
-    // Network
-    this.network = new Network("ws://localhost:2567");
+    // Network — allow overriding via ?server=wss://example.com
+    const params = new URLSearchParams(window.location.search);
+    const serverUrl = params.get("server") || `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:2567`;
+    this.network = new Network(serverUrl);
 
     // HUD refs
     this.healthFill = document.getElementById("health-fill")!;
