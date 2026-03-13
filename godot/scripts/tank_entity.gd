@@ -196,12 +196,8 @@ func update_tank(delta: float) -> void:
 		turret_diff += PI * 2.0
 	current_turret_angle += turret_diff * 0.25
 
-	# Turret is always a sibling of body — set absolute rotation
+	# Turret is always a sibling of body — set absolute rotation around center
 	turret.rotation.y = current_turret_angle
-	# Keep turret pivot aligned with body's mount point as body rotates
-	var mount_z := -0.3
-	turret.position.x = mount_z * sin(current_body_angle)
-	turret.position.z = mount_z * cos(current_body_angle)
 
 	# Shield bubble pulse
 	if shield_active:
