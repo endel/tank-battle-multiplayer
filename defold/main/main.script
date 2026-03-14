@@ -100,21 +100,21 @@ local function bind_room_events(self, room)
 		local sx, sy = tank.x * SCALE, tank.y * SCALE
 		local body_id = factory.create("#tank_factory", vmath.vector3(sx, sy, 0))
 		local turret_id = factory.create("#turret_factory", vmath.vector3(sx, sy, 0.5))
+		local shield_id = factory.create("#shield_factory", vmath.vector3(sx, sy, 0.9))
 		local tc = TEAM_COLORS[tank.team] or vmath.vector4(1, 1, 1, 1)
 
 		sprite.set_constant(msg.url(nil, body_id, "body"), "tint",
 			vmath.vector4(tc.x * 0.6 + 0.1, tc.y * 0.6 + 0.1, tc.z * 0.6 + 0.1, 1))
 		sprite.set_constant(msg.url(nil, body_id, "ring"), "tint",
 			vmath.vector4(tc.x, tc.y, tc.z, 0.3))
-		-- Shield starts fully transparent
-		sprite.set_constant(msg.url(nil, body_id, "shield"), "tint",
-			vmath.vector4(0.27, 0.8, 1, 0))
-		-- Turret color
 		sprite.set_constant(msg.url(nil, turret_id, "sprite"), "tint",
 			vmath.vector4(tc.x * 0.3, tc.y * 0.3, tc.z * 0.3, 1))
+		-- Shield starts hidden
+		sprite.set_constant(msg.url(nil, shield_id, "sprite"), "tint",
+			vmath.vector4(0.27, 0.8, 1, 0))
 
 		self.tanks[key] = {
-			body_id = body_id, turret_id = turret_id,
+			body_id = body_id, turret_id = turret_id, shield_id = shield_id,
 			target_x = sx, target_y = sy,
 			turret_angle = 0, body_angle = 0,
 			dead = tank.dead, team = tank.team, shield = 0,
@@ -153,6 +153,7 @@ local function bind_room_events(self, room)
 		if t then
 			go.delete(t.body_id)
 			go.delete(t.turret_id)
+			go.delete(t.shield_id)
 			self.tanks[key] = nil
 		end
 	end)
@@ -320,13 +321,14 @@ function update(self, dt)
 		go.set_position(vmath.vector3(new_x, new_y, 0.5), tank.turret_id)
 		go.set_rotation(vmath.quat_rotation_z(tank.turret_angle), tank.turret_id)
 
-		-- Shield pulse
+		-- Shield follows body, rendered on top (z: 0.9)
+		go.set_position(vmath.vector3(new_x, new_y, 0.9), tank.shield_id)
 		if tank.shield > 0 then
-			local pulse = 0.12 + math.sin(socket.gettime() * 4) * 0.06
-			sprite.set_constant(msg.url(nil, tank.body_id, "shield"), "tint",
+			local pulse = 0.2 + math.sin(socket.gettime() * 4) * 0.1
+			sprite.set_constant(msg.url(nil, tank.shield_id, "sprite"), "tint",
 				vmath.vector4(0.27, 0.8, 1, pulse))
 		else
-			sprite.set_constant(msg.url(nil, tank.body_id, "shield"), "tint",
+			sprite.set_constant(msg.url(nil, tank.shield_id, "sprite"), "tint",
 				vmath.vector4(0.27, 0.8, 1, 0))
 		end
 

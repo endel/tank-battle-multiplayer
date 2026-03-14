@@ -30,6 +30,11 @@ embedded_instances {
   "  type: \"factory\"\n"
   "  data: \"prototype: \\\"/main/turret.go\\\"\\n\"\n"
   "}\n"
+  "embedded_components {\n"
+  "  id: \"shield_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/shield.go\\\"\\n\"\n"
+  "}\n"
   ""
 }
 embedded_instances {
