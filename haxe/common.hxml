@@ -1,0 +1,4 @@
+-cp src
+-lib heaps
+-lib colyseus
+-main Main

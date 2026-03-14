@@ -1,0 +1,4 @@
+common.hxml
+-lib hlsdl
+-lib hashlink
+-hl hlc_out/main.c
