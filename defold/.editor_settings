@@ -13,6 +13,26 @@
         "/game.project"
         :cljfx-form-view
       ]
+      [
+        "/main/hud.gui_script"
+        :code
+      ]
+      [
+        "/main/hud.gui"
+        :scene
+      ]
+      [
+        "/main/bullet.go"
+        :scene
+      ]
+      [
+        "/main/block.go"
+        :scene
+      ]
+      [
+        "/gfx/game.atlas"
+        :scene
+      ]
     ]
   }
 }

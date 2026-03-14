@@ -25,6 +25,11 @@ embedded_instances {
   "  type: \"factory\"\n"
   "  data: \"prototype: \\\"/main/block.go\\\"\\n\"\n"
   "}\n"
+  "embedded_components {\n"
+  "  id: \"turret_factory\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/turret.go\\\"\\n\"\n"
+  "}\n"
   ""
 }
 embedded_instances {
@@ -37,7 +42,7 @@ embedded_instances {
   "near_z: -1.0\\n"
   "far_z: 1.0\\n"
   "orthographic_projection: 1\\n"
-  "orthographic_zoom: 0.6\\n"
+  "orthographic_zoom: 1.5\\n"
   "\"\n"
   "}\n"
   ""
