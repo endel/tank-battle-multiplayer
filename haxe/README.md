@@ -1,22 +1,17 @@
 # Tank Battle Multiplayer — Haxe + Heaps
 
-A game client for [Tank Battle Multiplayer](../README.md) built with [Haxe](https://haxe.org/) and the [Heaps](https://heaps.io/) game engine.
+![Screenshot](screenshot.webp)
 
-![screenshot](screenshot.webp)
+3D client for [Tank Battle Multiplayer](../README.md) built with [Haxe](https://haxe.org/) and the [Heaps](https://heaps.io/) game engine. Targets both Web (JS/WebGL) and Native (HashLink/C with SDL).
 
-## Prerequisites
-
-- [Haxe 4.3+](https://haxe.org/download/)
-- Install dependencies:
+## Setup
 
 ```bash
 haxelib install heaps
 haxelib install colyseus
-haxelib install hlsdl      # native only
-haxelib install hashlink   # native only
 ```
 
-## Build & Run — Web (JS)
+### Web (JS)
 
 ```bash
 haxe build.js.hxml
@@ -24,10 +19,11 @@ npx serve .
 # Open http://localhost:3000/index.html
 ```
 
-## Build & Run — Native (HashLink/C)
+### Native (HashLink/C)
 
 ```bash
-# Requires: brew install hashlink
+haxelib install hlsdl
+haxelib install hashlink
 ./build-native.sh
 DYLD_LIBRARY_PATH=/opt/homebrew/Cellar/hashlink/*/lib ./game_native
 ```

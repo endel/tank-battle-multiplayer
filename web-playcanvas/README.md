@@ -1,29 +1,20 @@
-# PlayCanvas Client
+# Tank Battle Multiplayer — PlayCanvas
 
 ![Screenshot](screenshot.webp)
 
-3D web client built with PlayCanvas Engine, TypeScript, and Vite.
+3D web client for [Tank Battle Multiplayer](../README.md) built with [PlayCanvas](https://playcanvas.com/), TypeScript, and Vite.
 
 ## Setup
 
 ```bash
 npm install
-```
-
-## Running
-
-Make sure the server is running first (`cd ../server && npm run dev`), then:
-
-```bash
 npm run dev
 ```
 
-Open the URL shown in the terminal (default: http://localhost:5173).
+Make sure the [game server](../server/) is running on port 2567.
 
-## Building
+## Controls
 
-```bash
-npm run build
-```
-
-Output goes to `dist/`.
+- **WASD / Arrow keys** — Move
+- **Mouse** — Aim turret
+- **Left click** — Shoot
