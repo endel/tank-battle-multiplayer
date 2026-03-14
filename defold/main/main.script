@@ -5,7 +5,7 @@ local Colyseus = require "colyseus.sdk"
 
 local SCALE = 16
 local MAP_SIZE = 48 * SCALE
-local ZOOM = 1.5 -- >1 = zoomed in
+local ZOOM = 1.5
 
 local TEAM_COLORS = {
 	[0] = vmath.vector4(1, 0.27, 0.27, 1),
@@ -38,7 +38,39 @@ local LEVEL = {
 	{29.5, 26, 1, 6}, {29, 29.5, 2, 1}, {22, 29.5, 6, 1}, {18.5, 29, 1, 2},
 }
 
--- ── Helper functions ──
+-- ── Effects ──
+
+local function spawn_explosion(self, x, y)
+	-- Fireball: expanding orange circle
+	local fb = factory.create("#pickable_factory", vmath.vector3(x, y, 0.8))
+	sprite.set_constant(msg.url(nil, fb, "sprite"), "tint", vmath.vector4(1, 0.6, 0.1, 0.9))
+	go.set_scale(vmath.vector3(2, 2, 1), fb)
+	go.animate(fb, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(20, 20, 1), go.EASING_OUTQUAD, 0.5)
+	sprite.set_constant(msg.url(nil, fb, "sprite"), "tint.w", 0.9)
+	go.animate(msg.url(nil, fb, "sprite"), "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_OUTQUAD, 0.5, 0, function()
+		go.delete(fb)
+	end)
+
+	-- Ring: expanding outline
+	local ring = factory.create("#pickable_factory", vmath.vector3(x, y, 0.7))
+	sprite.set_constant(msg.url(nil, ring, "sprite"), "tint", vmath.vector4(1, 0.3, 0, 0.6))
+	go.set_scale(vmath.vector3(4, 4, 1), ring)
+	go.animate(ring, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(30, 30, 1), go.EASING_OUTQUAD, 0.6)
+	go.animate(msg.url(nil, ring, "sprite"), "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_OUTQUAD, 0.6, 0, function()
+		go.delete(ring)
+	end)
+end
+
+local function play_shield_break(self, tank)
+	-- Flash shield white and expand, then fade
+	sprite.set_constant(msg.url(nil, tank.shield_id, "sprite"), "tint", vmath.vector4(1, 1, 1, 0.5))
+	go.animate(tank.shield_id, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(2, 2, 1), go.EASING_OUTQUAD, 0.3)
+	go.animate(msg.url(nil, tank.shield_id, "sprite"), "tint.w", go.PLAYBACK_ONCE_FORWARD, 0, go.EASING_OUTQUAD, 0.3, 0, function()
+		go.set_scale(vmath.vector3(1, 1, 1), tank.shield_id)
+	end)
+end
+
+-- ── Helpers ──
 
 local function build_level(self)
 	for _, block in ipairs(LEVEL) do
@@ -95,7 +127,7 @@ end
 local function bind_room_events(self, room)
 	local cb = Colyseus.callbacks(room)
 
-	-- Tanks: body GO + separate turret GO
+	-- Tanks
 	cb:on_add("tanks", function(tank, key)
 		local sx, sy = tank.x * SCALE, tank.y * SCALE
 		local body_id = factory.create("#tank_factory", vmath.vector3(sx, sy, 0))
@@ -109,7 +141,6 @@ local function bind_room_events(self, room)
 			vmath.vector4(tc.x, tc.y, tc.z, 0.3))
 		sprite.set_constant(msg.url(nil, turret_id, "sprite"), "tint",
 			vmath.vector4(tc.x * 0.3, tc.y * 0.3, tc.z * 0.3, 1))
-		-- Shield starts hidden
 		sprite.set_constant(msg.url(nil, shield_id, "sprite"), "tint",
 			vmath.vector4(0.27, 0.8, 1, 0))
 
@@ -132,16 +163,40 @@ local function bind_room_events(self, room)
 			local t = self.tanks[key]
 			if t then t.turret_angle = -val * (math.pi / 180) end
 		end)
-		cb:listen(tank, "dead", function(val)
+		cb:listen(tank, "dead", function(val, prev)
 			local t = self.tanks[key]
-			if t then t.dead = val end
-			if key == self.my_session_id and val and not self.winner_active then
-				show_announcement(self, "DESTROYED\nRespawning...", 2.0)
+			if t then
+				local was_alive = not t.dead
+				t.dead = val
+				if val and was_alive then
+					-- Explosion!
+					local pos = go.get_position(t.body_id)
+					spawn_explosion(self, pos.x, pos.y)
+				end
+			end
+			if key == self.my_session_id then
+				if val and not self.winner_active then
+					show_announcement(self, "DESTROYED\nRespawning...", 2.0)
+				end
+			end
+		end)
+		cb:listen(tank, "hp", function(val)
+			if key == self.my_session_id then
+				msg.post("hud#gui", "update_hp", { hp = val })
 			end
 		end)
 		cb:listen(tank, "shield", function(val)
 			local t = self.tanks[key]
-			if t then t.shield = val end
+			if t then
+				local had_shield = t.shield > 0
+				t.shield = val
+				if had_shield and val <= 0 then
+					play_shield_break(self, t)
+				end
+			end
+			if key == self.my_session_id then
+				msg.post("hud#gui", "update_shield", { shield = val })
+			end
 		end)
 		cb:listen(tank, "score", function(val)
 			update_leaderboard(self)
@@ -238,14 +293,12 @@ local function send_input(self)
 		self.last_dir_y = dir_y
 	end
 
-	-- Aim at mouse
 	local my_tank = self.tanks[self.my_session_id]
 	if my_tank then
 		local tank_pos = go.get_position(my_tank.body_id)
 		local cam_pos = go.get_position("camera")
 		local sw = tonumber(sys.get_config("display.width"))
 		local sh = tonumber(sys.get_config("display.height"))
-		-- Screen-to-world: account for zoom (pixels / zoom = world units)
 		local world_x = (self.mouse_x - sw / 2) / ZOOM + cam_pos.x
 		local world_y = (self.mouse_y - sh / 2) / ZOOM + cam_pos.y
 
@@ -302,7 +355,6 @@ function update(self, dt)
 
 	send_input(self)
 
-	-- Update tanks
 	for key, tank in pairs(self.tanks) do
 		local pos = go.get_position(tank.body_id)
 		local new_x = pos.x + (tank.target_x - pos.x) * 0.2
@@ -317,19 +369,16 @@ function update(self, dt)
 		end
 		go.set_rotation(vmath.quat_rotation_z(tank.body_angle), tank.body_id)
 
-		-- Turret position (follows body) + independent rotation
+		-- Turret follows body position, independent rotation
 		go.set_position(vmath.vector3(new_x, new_y, 0.5), tank.turret_id)
 		go.set_rotation(vmath.quat_rotation_z(tank.turret_angle), tank.turret_id)
 
-		-- Shield follows body, rendered on top (z: 0.9)
+		-- Shield follows body
 		go.set_position(vmath.vector3(new_x, new_y, 0.9), tank.shield_id)
 		if tank.shield > 0 then
 			local pulse = 0.2 + math.sin(socket.gettime() * 4) * 0.1
 			sprite.set_constant(msg.url(nil, tank.shield_id, "sprite"), "tint",
 				vmath.vector4(0.27, 0.8, 1, pulse))
-		else
-			sprite.set_constant(msg.url(nil, tank.shield_id, "sprite"), "tint",
-				vmath.vector4(0.27, 0.8, 1, 0))
 		end
 
 		-- Dead blink
@@ -341,7 +390,7 @@ function update(self, dt)
 		msg.post(msg.url(nil, tank.turret_id, "sprite"), visible and "enable" or "disable")
 	end
 
-	-- Interpolate bullets
+	-- Bullets
 	for key, bullet in pairs(self.bullets) do
 		local pos = go.get_position(bullet.id)
 		local new_x = pos.x + (bullet.target_x - pos.x) * 0.4
@@ -362,17 +411,12 @@ function update(self, dt)
 		local tank_pos = go.get_position(my_tank.body_id)
 		local sw = tonumber(sys.get_config("display.width"))
 		local sh = tonumber(sys.get_config("display.height"))
-
 		local nx = (self.mouse_x / sw) * 2 - 1
 		local ny = (self.mouse_y / sh) * 2 - 1
-
 		local look_ahead = 30
-		local offset_x = nx * look_ahead
-		local offset_y = ny * look_ahead
-
 		local cam_pos = go.get_position("camera")
-		local new_x = cam_pos.x + (tank_pos.x + offset_x - cam_pos.x) * 0.08
-		local new_y = cam_pos.y + (tank_pos.y + offset_y - cam_pos.y) * 0.08
+		local new_x = cam_pos.x + (tank_pos.x + nx * look_ahead - cam_pos.x) * 0.08
+		local new_y = cam_pos.y + (tank_pos.y + ny * look_ahead - cam_pos.y) * 0.08
 		go.set_position(vmath.vector3(new_x, new_y, 0), "camera")
 	end
 end

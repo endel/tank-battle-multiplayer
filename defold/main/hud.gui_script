@@ -18,5 +18,29 @@ function on_message(self, message_id, message)
 	elseif message_id == hash("show_announcement") then
 		gui.set_text(gui.get_node("announcement"), message.text)
 		self.announcement_timer = message.duration or 3.0
+
+	elseif message_id == hash("update_hp") then
+		local pct = math.max(0, message.hp / 10)
+		local fill = gui.get_node("hp_bar_fill")
+		gui.set_size(fill, vmath.vector3(200 * pct, 12, 0))
+		-- Color: green > 50%, orange > 25%, red below
+		if pct > 0.5 then
+			gui.set_color(fill, vmath.vector4(0.27, 1, 0.27, 1))
+		elseif pct > 0.25 then
+			gui.set_color(fill, vmath.vector4(1, 0.67, 0.27, 1))
+		else
+			gui.set_color(fill, vmath.vector4(1, 0.27, 0.27, 1))
+		end
+
+	elseif message_id == hash("update_shield") then
+		local bg = gui.get_node("shield_bar_bg")
+		local fill = gui.get_node("shield_bar_fill")
+		if message.shield > 0 then
+			gui.set_enabled(bg, true)
+			local pct = math.max(0, message.shield / 10)
+			gui.set_size(fill, vmath.vector3(200 * pct, 6, 0))
+		else
+			gui.set_enabled(bg, false)
+		end
 	end
 end
