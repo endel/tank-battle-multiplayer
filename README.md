@@ -15,6 +15,7 @@ The `server/` directory contains the shared game server powered by Colyseus 0.17
 | Godot | [`godot/`](godot/) | 3D | Windows, macOS, Linux, HTML5, iOS, Android | Procedural meshes | ![Godot](godot/screenshot.webp) |
 | Defold | [`defold/`](defold/) | 2D | Windows, macOS, Linux, HTML5, iOS, Android | Procedural (tinted white pixel) | ![Defold](defold/screenshot.webp) |
 | Haxe + Heaps | [`haxe/`](haxe/) | 3D | Web, Native (HL/C) | Procedural meshes | ![Haxe](haxe/screenshot.webp) |
+| Unity | [`unity/`](unity/) | 3D | Windows, macOS, Linux, WebGL, iOS, Android | Procedural primitives | ![Unity](unity/screenshot.webp) |
 | Three.js | [`web-threejs/`](web-threejs/) | 3D | Web | [Pixel Tank](https://sketchfab.com/3d-models/pixel-tank-d04bf57ee1ae4504856032549bcfd810) by [Firewarden3D](https://sketchfab.com/Firewarden) | ![Three.js](web-threejs/screenshot.webp) |
 
 ## Getting Started
