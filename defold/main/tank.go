@@ -29,12 +29,12 @@ embedded_components {
   "}\n"
   position {
     x: 0.0
-    y: 8.0
-    z: 0.1
+    y: 4.0
+    z: 0.5
   }
   scale {
-    x: 6.0
-    y: 16.0
+    x: 4.0
+    y: 14.0
     z: 1.0
   }
 }

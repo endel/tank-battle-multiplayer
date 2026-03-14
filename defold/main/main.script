@@ -80,9 +80,9 @@ local function bind_room_events(self, room)
 		sprite.set_constant(msg.url(nil, id, "body"), "tint",
 			vmath.vector4(tc.x * 0.6 + 0.1, tc.y * 0.6 + 0.1, tc.z * 0.6 + 0.1, 1))
 		sprite.set_constant(msg.url(nil, id, "turret"), "tint",
-			vmath.vector4(tc.x * 0.5 + 0.1, tc.y * 0.5 + 0.1, tc.z * 0.5 + 0.1, 1))
+			vmath.vector4(tc.x * 0.3, tc.y * 0.3, tc.z * 0.3, 1))
 		sprite.set_constant(msg.url(nil, id, "ring"), "tint",
-			vmath.vector4(tc.x, tc.y, tc.z, 0.5))
+			vmath.vector4(tc.x, tc.y, tc.z, 0.3))
 
 		self.tanks[key] = {
 			id = id, target_x = sx, target_y = sy,
