@@ -2,7 +2,7 @@
 
 A game client for [Tank Battle Multiplayer](../README.md) built with [Haxe](https://haxe.org/) and the [Heaps](https://heaps.io/) game engine.
 
-![screenshot](../web-playcanvas/screenshot.webp)
+![screenshot](screenshot.webp)
 
 ## Prerequisites
 
