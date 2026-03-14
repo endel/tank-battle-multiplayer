@@ -2,7 +2,7 @@
 
 ![Screenshot](screenshot.webp)
 
-Godot 4.3+ client for the Tank Battle Multiplayer game, using the [Colyseus Godot Extension](https://deploy-preview-215--colyseus-docs.netlify.app/getting-started/godot).
+Godot 4.3+ client for the Tank Battle Multiplayer game, using the [Colyseus Godot Extension](https://docs.colyseus.io/getting-started/godot).
 
 ## Setup
 
