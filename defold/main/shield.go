@@ -1,7 +1,7 @@
 embedded_components {
   id: "sprite"
   type: "sprite"
-  data: "default_animation: \"white\"\n"
+  data: "default_animation: \"circle\"\n"
   "material: \"/builtins/materials/sprite.material\"\n"
   "blend_mode: BLEND_MODE_ALPHA\n"
   "textures {\n"
@@ -14,8 +14,8 @@ embedded_components {
     z: 0.0
   }
   scale {
-    x: 28.0
-    y: 28.0
+    x: 0.875
+    y: 0.875
     z: 1.0
   }
 }

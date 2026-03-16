@@ -1,5 +1,47 @@
 images {
   image: "/gfx/white.png"
 }
-margin: 0
-extrude_borders: 0
+images {
+  image: "/gfx/circle.png"
+}
+images {
+  image: "/gfx/tank_body_red.png"
+}
+images {
+  image: "/gfx/tank_body_blue.png"
+}
+images {
+  image: "/gfx/tank_body_green.png"
+}
+images {
+  image: "/gfx/tank_body_yellow.png"
+}
+images {
+  image: "/gfx/barrel_red.png"
+}
+images {
+  image: "/gfx/barrel_blue.png"
+}
+images {
+  image: "/gfx/barrel_green.png"
+}
+images {
+  image: "/gfx/barrel_yellow.png"
+}
+images {
+  image: "/gfx/bullet.png"
+}
+images {
+  image: "/gfx/bullet_special.png"
+}
+images {
+  image: "/gfx/pickup_damage.png"
+}
+images {
+  image: "/gfx/pickup_repair.png"
+}
+images {
+  image: "/gfx/pickup_shield.png"
+}
+margin: 1
+extrude_borders: 2

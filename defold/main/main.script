@@ -15,10 +15,23 @@ local TEAM_COLORS = {
 }
 local TEAM_NAMES = { [0] = "Red", [1] = "Blue", [2] = "Green", [3] = "Yellow" }
 
-local PICKABLE_COLORS = {
-	repair = vmath.vector4(0.27, 1, 0.27, 1),
-	damage = vmath.vector4(1, 0.27, 0.27, 1),
-	shield = vmath.vector4(0.27, 0.53, 1, 1),
+local TEAM_BODY_SPRITES = {
+	[0] = hash("tank_body_red"),
+	[1] = hash("tank_body_blue"),
+	[2] = hash("tank_body_green"),
+	[3] = hash("tank_body_yellow"),
+}
+local TEAM_BARREL_SPRITES = {
+	[0] = hash("barrel_red"),
+	[1] = hash("barrel_blue"),
+	[2] = hash("barrel_green"),
+	[3] = hash("barrel_yellow"),
+}
+
+local PICKABLE_SPRITES = {
+	damage = hash("pickup_damage"),
+	repair = hash("pickup_repair"),
+	shield = hash("pickup_shield"),
 }
 
 local LEVEL = {
@@ -41,19 +54,21 @@ local LEVEL = {
 -- ── Effects ──
 
 local function spawn_explosion(self, x, y)
-	-- Fireball
+	-- Fireball (circle: go_scale * 10 * 32 = visual pixels)
 	local fb = factory.create("#pickable_factory", vmath.vector3(x, y, 0.8))
+	sprite.play_flipbook(msg.url(nil, fb, "sprite"), hash("circle"))
 	sprite.set_constant(msg.url(nil, fb, "sprite"), "tint", vmath.vector4(1, 0.6, 0.1, 0.9))
-	go.set_scale(vmath.vector3(1, 1, 1), fb)
-	go.animate(fb, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(8, 8, 1), go.EASING_OUTQUAD, 0.4, 0, function()
+	go.set_scale(vmath.vector3(0.03, 0.03, 1), fb)
+	go.animate(fb, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.25, 0.25, 1), go.EASING_OUTQUAD, 0.4, 0, function()
 		go.delete(fb)
 	end)
 
 	-- Ring
 	local ring = factory.create("#pickable_factory", vmath.vector3(x, y, 0.7))
+	sprite.play_flipbook(msg.url(nil, ring, "sprite"), hash("circle"))
 	sprite.set_constant(msg.url(nil, ring, "sprite"), "tint", vmath.vector4(1, 0.3, 0, 0.6))
-	go.set_scale(vmath.vector3(2, 2, 1), ring)
-	go.animate(ring, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(12, 12, 1), go.EASING_OUTQUAD, 0.5, 0, function()
+	go.set_scale(vmath.vector3(0.06, 0.06, 1), ring)
+	go.animate(ring, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.38, 0.38, 1), go.EASING_OUTQUAD, 0.5, 0, function()
 		go.delete(ring)
 	end)
 end
@@ -130,21 +145,19 @@ local function bind_room_events(self, room)
 		local body_id = factory.create("#tank_factory", vmath.vector3(sx, sy, 0))
 		local turret_id = factory.create("#turret_factory", vmath.vector3(sx, sy, 0.5))
 		local shield_id = factory.create("#shield_factory", vmath.vector3(sx, sy, 0.9))
-		local tc = TEAM_COLORS[tank.team] or vmath.vector4(1, 1, 1, 1)
-
-		sprite.set_constant(msg.url(nil, body_id, "body"), "tint",
-			vmath.vector4(tc.x * 0.6 + 0.1, tc.y * 0.6 + 0.1, tc.z * 0.6 + 0.1, 1))
-		sprite.set_constant(msg.url(nil, body_id, "ring"), "tint",
-			vmath.vector4(tc.x, tc.y, tc.z, 0.3))
-		sprite.set_constant(msg.url(nil, turret_id, "sprite"), "tint",
-			vmath.vector4(tc.x * 0.3, tc.y * 0.3, tc.z * 0.3, 1))
+		-- Set team-colored sprites
+		local body_sprite = TEAM_BODY_SPRITES[tank.team] or TEAM_BODY_SPRITES[0]
+		local barrel_sprite = TEAM_BARREL_SPRITES[tank.team] or TEAM_BARREL_SPRITES[0]
+		sprite.play_flipbook(msg.url(nil, body_id, "body"), body_sprite)
+		sprite.play_flipbook(msg.url(nil, turret_id, "sprite"), barrel_sprite)
 		sprite.set_constant(msg.url(nil, shield_id, "sprite"), "tint",
 			vmath.vector4(0.27, 0.8, 1, 0))
 
 		self.tanks[key] = {
 			body_id = body_id, turret_id = turret_id, shield_id = shield_id,
 			target_x = sx, target_y = sy,
-			turret_angle = 0, body_angle = 0,
+			turret_angle = 0, target_turret_angle = 0,
+			body_angle = 0, target_body_angle = 0,
 			dead = tank.dead, team = tank.team, shield = 0, hp = tank.hp or 10,
 		}
 
@@ -162,7 +175,7 @@ local function bind_room_events(self, room)
 		end)
 		cb:listen(tank, "angle", function(val)
 			local t = self.tanks[key]
-			if t then t.turret_angle = -val * (math.pi / 180) end
+			if t then t.target_turret_angle = -val * (math.pi / 180) end
 		end)
 		cb:listen(tank, "dead", function(val)
 			local t = self.tanks[key]
@@ -220,10 +233,9 @@ local function bind_room_events(self, room)
 	cb:on_add("bullets", function(bullet, key)
 		local sx, sy = bullet.x * SCALE, bullet.y * SCALE
 		local id = factory.create("#bullet_factory", vmath.vector3(sx, sy, 0.2))
-		local color = bullet.special
-			and vmath.vector4(1, 0.53, 0, 1)
-			or vmath.vector4(1, 1, 0.4, 1)
-		sprite.set_constant(msg.url(nil, id, "sprite"), "tint", color)
+		if bullet.special then
+			sprite.play_flipbook(msg.url(nil, id, "sprite"), hash("bullet_special"))
+		end
 		self.bullets[key] = { id = id, target_x = sx, target_y = sy }
 
 		cb:listen(bullet, "x", function(val)
@@ -248,9 +260,11 @@ local function bind_room_events(self, room)
 	cb:on_add("pickables", function(pick, key)
 		local sx, sy = pick.x * SCALE, pick.y * SCALE
 		local id = factory.create("#pickable_factory", vmath.vector3(sx, sy, 0.1))
-		local color = PICKABLE_COLORS[pick.type] or vmath.vector4(1, 1, 1, 1)
-		sprite.set_constant(msg.url(nil, id, "sprite"), "tint", color)
-		self.pickables[key] = { id = id }
+		local pickup_sprite = PICKABLE_SPRITES[pick.type]
+		if pickup_sprite then
+			sprite.play_flipbook(msg.url(nil, id, "sprite"), pickup_sprite)
+		end
+		self.pickables[key] = { id = id, type = pick.type }
 	end)
 
 	cb:on_remove("pickables", function(pick, key)
@@ -363,17 +377,27 @@ function update(self, dt)
 		local new_x = pos.x + (tank.target_x - pos.x) * 0.2
 		local new_y = pos.y + (tank.target_y - pos.y) * 0.2
 
-		-- Body position + rotation toward movement
+		-- Body position
 		go.set_position(vmath.vector3(new_x, new_y, 0), tank.body_id)
+
+		-- Body rotation toward movement (smoothed with angle unwrapping)
 		local dx = tank.target_x - pos.x
 		local dy = tank.target_y - pos.y
 		if math.abs(dx) > 0.5 or math.abs(dy) > 0.5 then
-			tank.body_angle = math.atan2(dy, dx) - math.pi / 2
+			tank.target_body_angle = math.atan2(dy, dx) - math.pi / 2
 		end
+		local body_diff = tank.target_body_angle - tank.body_angle
+		while body_diff > math.pi do body_diff = body_diff - math.pi * 2 end
+		while body_diff < -math.pi do body_diff = body_diff + math.pi * 2 end
+		tank.body_angle = tank.body_angle + body_diff * 0.15
 		go.set_rotation(vmath.quat_rotation_z(tank.body_angle), tank.body_id)
 
-		-- Turret follows body position, independent rotation
+		-- Turret follows body position, independent rotation (smoothed with angle unwrapping)
 		go.set_position(vmath.vector3(new_x, new_y, 0.5), tank.turret_id)
+		local turret_diff = tank.target_turret_angle - tank.turret_angle
+		while turret_diff > math.pi do turret_diff = turret_diff - math.pi * 2 end
+		while turret_diff < -math.pi do turret_diff = turret_diff + math.pi * 2 end
+		tank.turret_angle = tank.turret_angle + turret_diff * 0.25
 		go.set_rotation(vmath.quat_rotation_z(tank.turret_angle), tank.turret_id)
 
 		-- Shield follows body
@@ -396,16 +420,26 @@ function update(self, dt)
 	-- Bullets
 	for key, bullet in pairs(self.bullets) do
 		local pos = go.get_position(bullet.id)
-		local new_x = pos.x + (bullet.target_x - pos.x) * 0.4
-		local new_y = pos.y + (bullet.target_y - pos.y) * 0.4
+		local dx = bullet.target_x - pos.x
+		local dy = bullet.target_y - pos.y
+		-- Rotate bullet to face travel direction
+		if math.abs(dx) > 0.1 or math.abs(dy) > 0.1 then
+			local angle = math.atan2(dy, dx) - math.pi / 2
+			go.set_rotation(vmath.quat_rotation_z(angle), bullet.id)
+		end
+		local new_x = pos.x + dx * 0.4
+		local new_y = pos.y + dy * 0.4
 		go.set_position(vmath.vector3(new_x, new_y, 0.2), bullet.id)
 	end
 
-	-- Pickable pulse
+	-- Pickable pulse and spin (48x48 sprites with internal scale 10 → go_scale 0.05 ≈ 24px)
 	local t = socket.gettime()
 	for key, pick in pairs(self.pickables) do
-		local s = 1.0 + math.sin(t * 3) * 0.1
-		go.set_scale(vmath.vector3(2 * s, 2 * s, 1), pick.id)
+		local s = 0.05 * (1.0 + math.sin(t * 3) * 0.15)
+		go.set_scale(vmath.vector3(s, s, 1), pick.id)
+		if pick.type == "damage" then
+			go.set_rotation(vmath.quat_rotation_z(t * 2), pick.id)
+		end
 	end
 
 	-- Update per-tank bar positions (world → screen)
