@@ -11,6 +11,27 @@ export class TankState extends Schema {
   @type("boolean") dead: boolean = true;
   @type("string") killer: string = "";
   @type("uint16") score: number = 0;
+
+  // Non-synced game state
+  sessionId: string = "";
+  radius: number = 0.75;
+  dirX: number = 0;
+  dirY: number = 0;
+  shooting: boolean = false;
+  reloading: boolean = false;
+  lastShot: number = 0;
+  tHit: number = 0;
+  tRecover: number = 0;
+  ammo: number = 0;
+  died: number = 0;
+  respawned: number = 0;
+  deleted: boolean = false;
+  node: any = null;
+
+  spawnPosition() {
+    this.x = 2.5 + (this.team % 2) * 35 + Math.floor(Math.random() * 9);
+    this.y = 2.5 + Math.floor(this.team / 2) * 35 + Math.floor(Math.random() * 9);
+  }
 }
 
 export class BulletState extends Schema {
@@ -21,12 +42,25 @@ export class BulletState extends Schema {
   @type("float32") ty: number = 0;
   @type("float32") speed: number = 0.7;
   @type("boolean") special: boolean = false;
+
+  // Non-synced game state
+  ownerTank!: TankState;
+  damage: number = 3;
+  radius: number = 0.25;
+  hit: boolean = false;
+  node: any = null;
 }
 
 export class PickableState extends Schema {
   @type("string") type: string = "";
   @type("float32") x: number = 0;
   @type("float32") y: number = 0;
+
+  // Non-synced game state
+  id: string = "";
+  radius: number = 0.3;
+  ind: number = 0;
+  node: any = null;
 }
 
 export class TeamState extends Schema {

@@ -6,7 +6,7 @@ import {
   PickableState,
   TeamState,
 } from "../schema/BattleState";
-import { World, SpatialItem } from "../game/World";
+import { World } from "../game/World";
 import { Block } from "../game/Block";
 
 // ── Level data ──────────────────────────────────────────────
@@ -81,47 +81,7 @@ const RECOVERY_DELAY = 3000;
 const RECOVERY_INTERVAL = 1000;
 const WIN_SCORE = 10;
 
-// ── Internal data types ─────────────────────────────────────
-interface TankData extends SpatialItem {
-  sessionId: string;
-  teamId: number;
-  angle: number;
-  dirX: number;
-  dirY: number;
-  shooting: boolean;
-  reloading: boolean;
-  lastShot: number;
-  tHit: number;
-  tRecover: number;
-  ammo: number;
-  hp: number;
-  shield: number;
-  score: number;
-  dead: boolean;
-  died: number;
-  respawned: number;
-  deleted: boolean;
-  killer: string;
-}
-
-interface BulletData extends SpatialItem {
-  id: string;
-  ownerSid: string;
-  owner: TankData;
-  tx: number;
-  ty: number;
-  speed: number;
-  damage: number;
-  special: boolean;
-  hit: boolean;
-}
-
-interface PickData extends SpatialItem {
-  id: string;
-  type: string;
-  ind: number;
-}
-
+// ── Internal types ─────────────────────────────────────────
 interface PickSpawn {
   x: number;
   y: number;
@@ -137,9 +97,6 @@ export class BattleRoom extends Room {
   state = new BattleState();
 
   private world!: World;
-  private tanks = new Map<string, TankData>();
-  private bullets = new Map<string, BulletData>();
-  private pickItems = new Map<string, PickData>();
   private blocks: Block[] = [];
   private pickSpawns: PickSpawn[] = [];
   private bulletCounter = 0;
@@ -175,7 +132,7 @@ export class BattleRoom extends Room {
 
     // ── Message handlers ──
     this.onMessage("move", (client, data: { x: number; y: number }) => {
-      const tank = this.tanks.get(client.sessionId);
+      const tank = this.state.tanks.get(client.sessionId);
       if (!tank || tank.deleted) return;
       if (typeof data?.x === "number" && typeof data?.y === "number") {
         tank.dirX = data.x;
@@ -184,24 +141,23 @@ export class BattleRoom extends Room {
     });
 
     this.onMessage("target", (client, angle: number) => {
-      const tank = this.tanks.get(client.sessionId);
+      const tank = this.state.tanks.get(client.sessionId);
       if (!tank || tank.deleted) return;
       if (typeof angle === "number") {
         tank.angle = angle;
-        this.state.tanks.get(client.sessionId)!.angle = angle;
       }
     });
 
     this.onMessage("shoot", (client, shooting: boolean) => {
-      const tank = this.tanks.get(client.sessionId);
+      const tank = this.state.tanks.get(client.sessionId);
       if (!tank || tank.deleted || tank.dead) return;
       tank.shooting = !!shooting;
     });
 
     this.onMessage("name", (client, name: string) => {
       if (typeof name === "string" && /^[a-z0-9\-_]{4,8}$/i.test(name)) {
-        const s = this.state.tanks.get(client.sessionId);
-        if (s) s.name = name;
+        const tank = this.state.tanks.get(client.sessionId);
+        if (tank) tank.name = name;
       }
     });
 
@@ -214,75 +170,28 @@ export class BattleRoom extends Room {
     const teamId = this.pickWeakestTeam();
     this.state.teams[teamId].tanks++;
 
-    // Schema
-    const schema = new TankState();
-    schema.team = teamId;
-    schema.dead = true;
-    this.state.tanks.set(client.sessionId, schema);
+    const tank = new TankState();
+    tank.sessionId = client.sessionId;
+    tank.team = teamId;
+    tank.dead = true;
+    tank.died = Date.now();
+    tank.respawned = Date.now();
+    tank.spawnPosition();
 
-    // Internal
-    const tank: TankData = {
-      sessionId: client.sessionId,
-      teamId,
-      x: 0,
-      y: 0,
-      radius: TANK_RADIUS,
-      angle: Math.random() * 360,
-      dirX: 0,
-      dirY: 0,
-      shooting: false,
-      reloading: false,
-      lastShot: 0,
-      tHit: 0,
-      tRecover: 0,
-      ammo: 0,
-      hp: 10,
-      shield: 0,
-      score: 0,
-      dead: true,
-      died: Date.now(),
-      respawned: Date.now(),
-      deleted: false,
-      killer: "",
-      node: null,
-    };
-    this.spawnPosition(tank);
-    this.tanks.set(client.sessionId, tank);
+    this.state.tanks.set(client.sessionId, tank);
     this.world.add("tank", tank);
-    this.syncTank(tank);
   }
 
   onLeave(client: Client) {
-    const tank = this.tanks.get(client.sessionId);
+    const tank = this.state.tanks.get(client.sessionId);
     if (!tank) return;
-    this.state.teams[tank.teamId].tanks--;
+    this.state.teams[tank.team].tanks--;
     this.world.remove("tank", tank);
     tank.deleted = true;
-    this.tanks.delete(client.sessionId);
     this.state.tanks.delete(client.sessionId);
   }
 
   // ── Helpers ───────────────────────────────────────────────
-  private spawnPosition(tank: TankData) {
-    tank.x =
-      2.5 + (tank.teamId % 2) * 35 + Math.floor(Math.random() * 9);
-    tank.y =
-      2.5 + Math.floor(tank.teamId / 2) * 35 + Math.floor(Math.random() * 9);
-  }
-
-  private syncTank(tank: TankData) {
-    const s = this.state.tanks.get(tank.sessionId);
-    if (!s) return;
-    s.x = parseFloat(tank.x.toFixed(3));
-    s.y = parseFloat(tank.y.toFixed(3));
-    s.angle = Math.floor(tank.angle);
-    s.hp = tank.hp;
-    s.shield = tank.shield;
-    s.dead = tank.dead;
-    s.score = tank.score;
-    s.killer = tank.killer;
-  }
-
   private pickWeakestTeam(): number {
     let candidates = this.state.teams
       .map((t, i) => ({ id: i, tanks: t.tanks, score: t.score }))
@@ -309,7 +218,7 @@ export class BattleRoom extends Room {
     let winner: number | null = null;
 
     // ── Tanks ──
-    for (const [sid, tank] of this.tanks) {
+    for (const [sid, tank] of this.state.tanks) {
       if (tank.deleted) continue;
 
       if (!tank.dead) {
@@ -338,7 +247,7 @@ export class BattleRoom extends Room {
         }
 
         // Tank-tank collision
-        this.world.forEachAround("tank", tank, (other: TankData) => {
+        this.world.forEachAround("tank", tank, (other: TankState) => {
           if (other.dead) return;
           const dx = tank.x - other.x;
           const dy = tank.y - other.y;
@@ -372,7 +281,7 @@ export class BattleRoom extends Room {
         this.world.forEachAround(
           "pickable",
           tank,
-          (pick: PickData) => {
+          (pick: PickableState) => {
             const dx = tank.x - pick.x;
             const dy = tank.y - pick.y;
             if (
@@ -398,7 +307,6 @@ export class BattleRoom extends Room {
             this.world.remove("pickable", pick);
             this.pickSpawns[pick.ind].picked = now;
             this.pickSpawns[pick.ind].activeId = null;
-            this.pickItems.delete(pick.id);
             this.state.pickables.delete(pick.id);
           },
           null
@@ -411,7 +319,7 @@ export class BattleRoom extends Room {
           tank.shield = 0;
           tank.ammo = 0;
           tank.respawned = now;
-          this.spawnPosition(tank);
+          tank.spawnPosition();
         }
       }
 
@@ -422,9 +330,6 @@ export class BattleRoom extends Room {
       if (!tank.dead && tank.shooting && !tank.reloading) {
         this.createBullet(tank);
       }
-
-      // Sync to schema
-      this.syncTank(tank);
     }
 
     // ── Respawn pickables ──
@@ -432,31 +337,24 @@ export class BattleRoom extends Room {
       const spawn = this.pickSpawns[i];
       if (!spawn.activeId && now - spawn.picked > spawn.delay) {
         const id = `p${++this.pickCounter}`;
-        const pick: PickData = {
-          id,
-          type: spawn.type,
-          x: spawn.x,
-          y: spawn.y,
-          radius: PICKABLE_RADIUS,
-          ind: i,
-          node: null,
-        };
-        this.pickItems.set(id, pick);
+
+        const pick = new PickableState();
+        pick.id = id;
+        pick.type = spawn.type;
+        pick.x = spawn.x;
+        pick.y = spawn.y;
+        pick.ind = i;
+
         this.world.add("pickable", pick);
         spawn.activeId = id;
-
-        const ps = new PickableState();
-        ps.type = spawn.type;
-        ps.x = spawn.x;
-        ps.y = spawn.y;
-        this.state.pickables.set(id, ps);
+        this.state.pickables.set(id, pick);
       }
     }
 
     // ── Bullets ──
     const bulletsToRemove: string[] = [];
 
-    for (const [bid, bullet] of this.bullets) {
+    for (const [bid, bullet] of this.state.bullets) {
       // Move toward target
       const dx = bullet.tx - bullet.x;
       const dy = bullet.ty - bullet.y;
@@ -486,12 +384,12 @@ export class BattleRoom extends Room {
         this.world.forEachAround(
           "tank",
           bullet,
-          (tank: TankData) => {
+          (tank: TankState) => {
             if (
               deleting ||
               tank.dead ||
-              tank.sessionId === bullet.ownerSid ||
-              tank.teamId === bullet.owner.teamId ||
+              tank.sessionId === bullet.owner ||
+              tank.team === bullet.ownerTank.team ||
               now - tank.respawned <= INVULN_TIME
             )
               return;
@@ -507,7 +405,7 @@ export class BattleRoom extends Room {
             // Hit!
             bullet.hit = true;
 
-            if (!bullet.owner.deleted) {
+            if (!bullet.ownerTank.deleted) {
               let damage = bullet.damage;
               tank.tHit = now;
 
@@ -525,15 +423,15 @@ export class BattleRoom extends Room {
                 tank.hp -= damage;
 
                 if (tank.hp <= 0) {
-                  bullet.owner.score++;
-                  this.state.teams[bullet.owner.teamId].score++;
+                  bullet.ownerTank.score++;
+                  this.state.teams[bullet.ownerTank.team].score++;
                   if (
-                    this.state.teams[bullet.owner.teamId].score >= WIN_SCORE
+                    this.state.teams[bullet.ownerTank.team].score >= WIN_SCORE
                   ) {
-                    winner = bullet.owner.teamId;
+                    winner = bullet.ownerTank.team;
                   }
                   this.state.totalScore++;
-                  tank.killer = bullet.ownerSid;
+                  tank.killer = bullet.owner;
                   // Respawn tank
                   tank.dead = true;
                   tank.died = now;
@@ -572,12 +470,6 @@ export class BattleRoom extends Room {
 
       if (!deleting) {
         this.world.updateItem("bullet", bullet);
-        // Sync bullet position
-        const bs = this.state.bullets.get(bid);
-        if (bs) {
-          bs.x = parseFloat(bullet.x.toFixed(2));
-          bs.y = parseFloat(bullet.y.toFixed(2));
-        }
       } else {
         bulletsToRemove.push(bid);
       }
@@ -585,10 +477,9 @@ export class BattleRoom extends Room {
 
     // Remove bullets after iteration
     for (const bid of bulletsToRemove) {
-      const bullet = this.bullets.get(bid);
+      const bullet = this.state.bullets.get(bid);
       if (bullet) {
         this.world.remove("bullet", bullet);
-        this.bullets.delete(bid);
         this.state.bullets.delete(bid);
       }
     }
@@ -601,7 +492,7 @@ export class BattleRoom extends Room {
       for (let i = 0; i < 4; i++) {
         this.state.teams[i].score = 0;
       }
-      for (const [, tank] of this.tanks) {
+      for (const [, tank] of this.state.tanks) {
         tank.score = 0;
         tank.killer = "";
         if (!tank.dead) {
@@ -620,16 +511,12 @@ export class BattleRoom extends Room {
   }
 
   // ── Create bullet ─────────────────────────────────────────
-  private createBullet(tank: TankData) {
+  private createBullet(tank: TankState) {
     tank.tHit = Date.now();
     tank.reloading = true;
     tank.lastShot = Date.now();
 
     const rad = (-tank.angle + 90) * (Math.PI / 180);
-    const bx = parseFloat(tank.x.toFixed(3));
-    const by = parseFloat(tank.y.toFixed(3));
-    const tx = parseFloat((Math.cos(rad) * TANK_RANGE + bx).toFixed(3));
-    const ty = parseFloat((Math.sin(rad) * TANK_RANGE + by).toFixed(3));
 
     let speed = BULLET_SPEED;
     let damage = BULLET_DAMAGE;
@@ -643,33 +530,19 @@ export class BattleRoom extends Room {
     }
 
     const id = `b${++this.bulletCounter}`;
-    const bullet: BulletData = {
-      id,
-      ownerSid: tank.sessionId,
-      owner: tank,
-      x: bx,
-      y: by,
-      tx,
-      ty,
-      speed,
-      damage,
-      radius: BULLET_RADIUS,
-      special,
-      hit: false,
-      node: null,
-    };
 
-    this.bullets.set(id, bullet);
+    const bullet = new BulletState();
+    bullet.owner = tank.sessionId;
+    bullet.ownerTank = tank;
+    bullet.x = tank.x;
+    bullet.y = tank.y;
+    bullet.tx = Math.cos(rad) * TANK_RANGE + tank.x;
+    bullet.ty = Math.sin(rad) * TANK_RANGE + tank.y;
+    bullet.speed = speed;
+    bullet.damage = damage;
+    bullet.special = special;
+
+    this.state.bullets.set(id, bullet);
     this.world.add("bullet", bullet);
-
-    const bs = new BulletState();
-    bs.owner = tank.sessionId;
-    bs.x = bx;
-    bs.y = by;
-    bs.tx = tx;
-    bs.ty = ty;
-    bs.speed = speed;
-    bs.special = special;
-    this.state.bullets.set(id, bs);
   }
 }
