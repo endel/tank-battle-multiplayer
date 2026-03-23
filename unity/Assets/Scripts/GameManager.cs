@@ -626,10 +626,9 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    async void OnDestroy()
+    void OnDestroy()
     {
-        if (room != null)
-            await room.Leave();
+        room?.Leave();
 
         // Cleanup all spawned objects
         foreach (var kvp in tanks) kvp.Value.Destroy();
