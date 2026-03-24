@@ -81,7 +81,6 @@ public class TankGame : Game
     readonly Dictionary<string, TankVisual> _tankVisuals = new();
     readonly Dictionary<string, BulletVisual> _bulletVisuals = new();
     readonly Dictionary<string, PickableState> _pickables = new();
-    readonly object _syncLock = new();
 
     // Camera
     Vector2 _cameraPos = new(24, 24);
@@ -174,58 +173,52 @@ public class TankGame : Game
         // ── Tanks ──
         callbacks.OnAdd(state => state.tanks, (key, tank) =>
         {
-            lock (_syncLock)
+            _tankVisuals[key] = new TankVisual
             {
-                _tankVisuals[key] = new TankVisual
-                {
-                    CurrentX = tank.x, CurrentY = tank.y,
-                    TargetX = tank.x, TargetY = tank.y,
-                    PrevTargetX = tank.x, PrevTargetY = tank.y,
-                    Team = tank.team,
-                    Hp = tank.hp, Shield = tank.shield,
-                    Dead = tank.dead,
-                    TurretAngle = tank.angle,
-                    TargetTurretAngle = tank.angle,
-                    Schema = tank,
-                };
-            }
+                CurrentX = tank.x, CurrentY = tank.y,
+                TargetX = tank.x, TargetY = tank.y,
+                PrevTargetX = tank.x, PrevTargetY = tank.y,
+                Team = tank.team,
+                Hp = tank.hp, Shield = tank.shield,
+                Dead = tank.dead,
+                TurretAngle = tank.angle,
+                TargetTurretAngle = tank.angle,
+                Schema = tank,
+            };
         });
         callbacks.OnRemove(state => state.tanks, (key, _) =>
         {
-            lock (_syncLock) { _tankVisuals.Remove(key); }
+            _tankVisuals.Remove(key);
         });
 
         // ── Bullets ──
         callbacks.OnAdd(state => state.bullets, (key, bullet) =>
         {
             byte team = 0;
-            lock (_syncLock)
-            {
-                if (_tankVisuals.TryGetValue(bullet.owner, out var ownerVis))
-                    team = ownerVis.Team;
+            if (_tankVisuals.TryGetValue(bullet.owner, out var ownerVis))
+                team = ownerVis.Team;
 
-                _bulletVisuals[key] = new BulletVisual
-                {
-                    CurrentX = bullet.x, CurrentY = bullet.y,
-                    ServerX = bullet.x, ServerY = bullet.y,
-                    OwnerTeam = team, Special = bullet.special,
-                    Schema = bullet,
-                };
-            }
+            _bulletVisuals[key] = new BulletVisual
+            {
+                CurrentX = bullet.x, CurrentY = bullet.y,
+                ServerX = bullet.x, ServerY = bullet.y,
+                OwnerTeam = team, Special = bullet.special,
+                Schema = bullet,
+            };
         });
         callbacks.OnRemove(state => state.bullets, (key, _) =>
         {
-            lock (_syncLock) { _bulletVisuals.Remove(key); }
+            _bulletVisuals.Remove(key);
         });
 
         // ── Pickables ──
         callbacks.OnAdd(state => state.pickables, (key, pick) =>
         {
-            lock (_syncLock) { _pickables[key] = pick; }
+            _pickables[key] = pick;
         });
         callbacks.OnRemove(state => state.pickables, (key, _) =>
         {
-            lock (_syncLock) { _pickables.Remove(key); }
+            _pickables.Remove(key);
         });
     }
 
@@ -272,7 +265,7 @@ public class TankGame : Game
 
         // ── Turret aiming (mouse → world position → angle) ──
         TankVisual myTank;
-        lock (_syncLock) { _tankVisuals.TryGetValue(_sessionId, out myTank); }
+        _tankVisuals.TryGetValue(_sessionId, out myTank);
 
         if (myTank != null)
         {
@@ -305,63 +298,60 @@ public class TankGame : Game
 
     void SyncAndInterpolate()
     {
-        lock (_syncLock)
+        // ── Tanks ──
+        foreach (var (key, vis) in _tankVisuals)
         {
-            // ── Tanks ──
-            foreach (var (key, vis) in _tankVisuals)
+            var s = vis.Schema;
+            vis.PrevTargetX = vis.TargetX;
+            vis.PrevTargetY = vis.TargetY;
+            vis.TargetX = s.x;
+            vis.TargetY = s.y;
+            vis.Team = s.team;
+            vis.Hp = s.hp;
+            vis.Shield = s.shield;
+            vis.Dead = s.dead;
+
+            if (key != _sessionId)
+                vis.TargetTurretAngle = s.angle;
+
+            // Position interpolation
+            vis.CurrentX = MathHelper.Lerp(vis.CurrentX, vis.TargetX, 0.2f);
+            vis.CurrentY = MathHelper.Lerp(vis.CurrentY, vis.TargetY, 0.2f);
+
+            // Body rotation from movement direction
+            float mdx = vis.TargetX - vis.PrevTargetX;
+            float mdy = vis.TargetY - vis.PrevTargetY;
+            if (mdx * mdx + mdy * mdy > 0.0001f)
+                vis.TargetBodyAngle = MathF.Atan2(mdy, mdx);
+            vis.BodyAngle = LerpAngleRad(vis.BodyAngle, vis.TargetBodyAngle, 0.15f);
+
+            // Turret angle interpolation (degrees)
+            vis.TurretAngle = LerpAngleDeg(vis.TurretAngle, vis.TargetTurretAngle, 0.25f);
+
+            // Track own state
+            if (key == _sessionId)
             {
-                var s = vis.Schema;
-                vis.PrevTargetX = vis.TargetX;
-                vis.PrevTargetY = vis.TargetY;
-                vis.TargetX = s.x;
-                vis.TargetY = s.y;
-                vis.Team = s.team;
-                vis.Hp = s.hp;
-                vis.Shield = s.shield;
-                vis.Dead = s.dead;
-
-                if (key != _sessionId)
-                    vis.TargetTurretAngle = s.angle;
-
-                // Position interpolation
-                vis.CurrentX = MathHelper.Lerp(vis.CurrentX, vis.TargetX, 0.2f);
-                vis.CurrentY = MathHelper.Lerp(vis.CurrentY, vis.TargetY, 0.2f);
-
-                // Body rotation from movement direction
-                float mdx = vis.TargetX - vis.PrevTargetX;
-                float mdy = vis.TargetY - vis.PrevTargetY;
-                if (mdx * mdx + mdy * mdy > 0.0001f)
-                    vis.TargetBodyAngle = MathF.Atan2(mdy, mdx);
-                vis.BodyAngle = LerpAngleRad(vis.BodyAngle, vis.TargetBodyAngle, 0.15f);
-
-                // Turret angle interpolation (degrees)
-                vis.TurretAngle = LerpAngleDeg(vis.TurretAngle, vis.TargetTurretAngle, 0.25f);
-
-                // Track own state
-                if (key == _sessionId)
-                {
-                    _myHp = s.hp;
-                    _myShield = s.shield;
-                    _myDead = s.dead;
-                    _myTeam = s.team;
-                }
+                _myHp = s.hp;
+                _myShield = s.shield;
+                _myDead = s.dead;
+                _myTeam = s.team;
             }
+        }
 
-            // ── Bullets ──
-            foreach (var (_, vis) in _bulletVisuals)
-            {
-                vis.ServerX = vis.Schema.x;
-                vis.ServerY = vis.Schema.y;
-                vis.CurrentX = MathHelper.Lerp(vis.CurrentX, vis.ServerX, 0.4f);
-                vis.CurrentY = MathHelper.Lerp(vis.CurrentY, vis.ServerY, 0.4f);
-            }
+        // ── Bullets ──
+        foreach (var (_, vis) in _bulletVisuals)
+        {
+            vis.ServerX = vis.Schema.x;
+            vis.ServerY = vis.Schema.y;
+            vis.CurrentX = MathHelper.Lerp(vis.CurrentX, vis.ServerX, 0.4f);
+            vis.CurrentY = MathHelper.Lerp(vis.CurrentY, vis.ServerY, 0.4f);
         }
     }
 
     void UpdateCamera()
     {
         TankVisual my;
-        lock (_syncLock) { _tankVisuals.TryGetValue(_sessionId, out my); }
+        _tankVisuals.TryGetValue(_sessionId, out my);
         if (my == null) return;
 
         var target = new Vector2(my.CurrentX, my.CurrentY);
@@ -501,63 +491,57 @@ public class TankGame : Game
         float bob = MathF.Sin(t * 2) * 0.15f;
         float pulse = 0.85f + MathF.Sin(t * 3) * 0.15f;
 
-        lock (_syncLock)
+        foreach (var (_, pick) in _pickables)
         {
-            foreach (var (_, pick) in _pickables)
+            Color color = pick.type switch
             {
-                Color color = pick.type switch
-                {
-                    "repair" => new Color(68, 255, 68),
-                    "shield" => new Color(68, 136, 255),
-                    "damage" => new Color(255, 68, 68),
-                    _ => Color.White,
-                };
+                "repair" => new Color(68, 255, 68),
+                "shield" => new Color(68, 136, 255),
+                "damage" => new Color(255, 68, 68),
+                _ => Color.White,
+            };
 
-                float py = pick.y + bob;
-                // Glow
-                FillCircle(pick.x, py, 0.5f * pulse, color * 0.12f);
-                // Core
-                FillCircle(pick.x, py, 0.22f, color);
+            float py = pick.y + bob;
+            // Glow
+            FillCircle(pick.x, py, 0.5f * pulse, color * 0.12f);
+            // Core
+            FillCircle(pick.x, py, 0.22f, color);
 
-                // Type indicator
-                if (pick.type == "repair")
-                {
-                    // Plus sign
-                    _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
-                        0, new Vector2(0.5f, 0.5f), new Vector2(0.35f, 0.1f), SpriteEffects.None, 0);
-                    _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
-                        0, new Vector2(0.5f, 0.5f), new Vector2(0.1f, 0.35f), SpriteEffects.None, 0);
-                }
-                else if (pick.type == "shield")
-                {
-                    // Small ring outline
-                    FillCircle(pick.x, py, 0.18f, Color.White * 0.3f);
-                    FillCircle(pick.x, py, 0.12f, color);
-                }
-                else if (pick.type == "damage")
-                {
-                    // Diamond shape (rotated square)
-                    _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
-                        MathF.PI / 4, new Vector2(0.5f, 0.5f), new Vector2(0.22f, 0.22f), SpriteEffects.None, 0);
-                }
+            // Type indicator
+            if (pick.type == "repair")
+            {
+                // Plus sign
+                _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
+                    0, new Vector2(0.5f, 0.5f), new Vector2(0.35f, 0.1f), SpriteEffects.None, 0);
+                _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
+                    0, new Vector2(0.5f, 0.5f), new Vector2(0.1f, 0.35f), SpriteEffects.None, 0);
+            }
+            else if (pick.type == "shield")
+            {
+                // Small ring outline
+                FillCircle(pick.x, py, 0.18f, Color.White * 0.3f);
+                FillCircle(pick.x, py, 0.12f, color);
+            }
+            else if (pick.type == "damage")
+            {
+                // Diamond shape (rotated square)
+                _spriteBatch.Draw(_pixel, new Vector2(pick.x, py), null, Color.White * 0.9f,
+                    MathF.PI / 4, new Vector2(0.5f, 0.5f), new Vector2(0.22f, 0.22f), SpriteEffects.None, 0);
             }
         }
     }
 
     void DrawBullets()
     {
-        lock (_syncLock)
+        foreach (var (_, vis) in _bulletVisuals)
         {
-            foreach (var (_, vis) in _bulletVisuals)
-            {
-                Color color = vis.Special ? new Color(255, 136, 0) : TeamColors[vis.OwnerTeam % 4];
-                float radius = vis.Special ? 0.2f : 0.12f;
+            Color color = vis.Special ? new Color(255, 136, 0) : TeamColors[vis.OwnerTeam % 4];
+            float radius = vis.Special ? 0.2f : 0.12f;
 
-                // Glow
-                FillCircle(vis.CurrentX, vis.CurrentY, radius * 2.5f, color * 0.15f);
-                // Core
-                FillCircle(vis.CurrentX, vis.CurrentY, radius, color);
-            }
+            // Glow
+            FillCircle(vis.CurrentX, vis.CurrentY, radius * 2.5f, color * 0.15f);
+            // Core
+            FillCircle(vis.CurrentX, vis.CurrentY, radius, color);
         }
     }
 
@@ -565,75 +549,72 @@ public class TankGame : Game
     {
         float time = (float)gameTime.TotalGameTime.TotalSeconds;
 
-        lock (_syncLock)
+        foreach (var (key, vis) in _tankVisuals)
         {
-            foreach (var (key, vis) in _tankVisuals)
+            // Dead tanks blink
+            if (vis.Dead)
             {
-                // Dead tanks blink
-                if (vis.Dead)
-                {
-                    if (MathF.Sin(time * 12) < 0) continue;
-                }
+                if (MathF.Sin(time * 12) < 0) continue;
+            }
 
-                Color teamColor = TeamColors[vis.Team % 4];
-                Color teamDark = TeamColorsDark[vis.Team % 4];
-                float cx = vis.CurrentX, cy = vis.CurrentY;
-                bool isMe = key == _sessionId;
+            Color teamColor = TeamColors[vis.Team % 4];
+            Color teamDark = TeamColorsDark[vis.Team % 4];
+            float cx = vis.CurrentX, cy = vis.CurrentY;
+            bool isMe = key == _sessionId;
 
-                // ── Team indicator ring ──
-                FillCircle(cx, cy, 0.85f, teamColor * 0.2f);
+            // ── Team indicator ring ──
+            FillCircle(cx, cy, 0.85f, teamColor * 0.2f);
 
-                // ── Shield bubble ──
-                if (vis.Shield > 0)
-                {
-                    float sa = 0.10f + 0.04f * MathF.Sin(time * 3);
-                    FillCircle(cx, cy, 1.05f, new Color(68, 200, 255) * sa);
-                }
+            // ── Shield bubble ──
+            if (vis.Shield > 0)
+            {
+                float sa = 0.10f + 0.04f * MathF.Sin(time * 3);
+                FillCircle(cx, cy, 1.05f, new Color(68, 200, 255) * sa);
+            }
 
-                // ── Tank body (rotated rectangle) ──
-                _spriteBatch.Draw(_pixel, new Vector2(cx, cy), null, teamDark,
-                    vis.BodyAngle, new Vector2(0.5f, 0.5f), new Vector2(1.4f, 0.9f),
-                    SpriteEffects.None, 0);
+            // ── Tank body (rotated rectangle) ──
+            _spriteBatch.Draw(_pixel, new Vector2(cx, cy), null, teamDark,
+                vis.BodyAngle, new Vector2(0.5f, 0.5f), new Vector2(1.4f, 0.9f),
+                SpriteEffects.None, 0);
 
-                // Body highlight
-                _spriteBatch.Draw(_pixel, new Vector2(cx, cy), null, teamColor * 0.4f,
-                    vis.BodyAngle, new Vector2(0.5f, 0.5f), new Vector2(1.3f, 0.8f),
-                    SpriteEffects.None, 0);
+            // Body highlight
+            _spriteBatch.Draw(_pixel, new Vector2(cx, cy), null, teamColor * 0.4f,
+                vis.BodyAngle, new Vector2(0.5f, 0.5f), new Vector2(1.3f, 0.8f),
+                SpriteEffects.None, 0);
 
-                // ── Turret ──
-                float aRad = MathHelper.ToRadians(vis.TurretAngle);
-                float tdx = MathF.Sin(aRad), tdy = MathF.Cos(aRad);
-                var turretStart = new Vector2(cx, cy);
-                var turretEnd = new Vector2(cx + tdx * 1.2f, cy + tdy * 1.2f);
-                DrawLine(turretStart, turretEnd, 0.2f, teamColor);
+            // ── Turret ──
+            float aRad = MathHelper.ToRadians(vis.TurretAngle);
+            float tdx = MathF.Sin(aRad), tdy = MathF.Cos(aRad);
+            var turretStart = new Vector2(cx, cy);
+            var turretEnd = new Vector2(cx + tdx * 1.2f, cy + tdy * 1.2f);
+            DrawLine(turretStart, turretEnd, 0.2f, teamColor);
 
-                // Turret muzzle
-                FillCircle(cx + tdx * 1.15f, cy + tdy * 1.15f, 0.14f, teamColor);
+            // Turret muzzle
+            FillCircle(cx + tdx * 1.15f, cy + tdy * 1.15f, 0.14f, teamColor);
 
-                // Turret pivot
-                FillCircle(cx, cy, 0.25f, teamDark);
+            // Turret pivot
+            FillCircle(cx, cy, 0.25f, teamDark);
 
-                // ── Health bar (above tank) ──
-                if (vis.Hp < 10 && vis.Hp > 0)
-                {
-                    float barW = 1.2f, barH = 0.1f;
-                    float barY = cy - 1.15f;
-                    // Background
-                    _spriteBatch.Draw(_pixel, new Vector2(cx - barW / 2, barY), null,
-                        new Color(0, 0, 0, 160), 0, Vector2.Zero, new Vector2(barW, barH), SpriteEffects.None, 0);
-                    // Fill
-                    float pct = vis.Hp / 10f;
-                    Color hpColor = pct > 0.5f ? Color.Lime : pct > 0.25f ? Color.Orange : Color.Red;
-                    _spriteBatch.Draw(_pixel, new Vector2(cx - barW / 2, barY), null,
-                        hpColor, 0, Vector2.Zero, new Vector2(barW * pct, barH), SpriteEffects.None, 0);
-                }
+            // ── Health bar (above tank) ──
+            if (vis.Hp < 10 && vis.Hp > 0)
+            {
+                float barW = 1.2f, barH = 0.1f;
+                float barY = cy - 1.15f;
+                // Background
+                _spriteBatch.Draw(_pixel, new Vector2(cx - barW / 2, barY), null,
+                    new Color(0, 0, 0, 160), 0, Vector2.Zero, new Vector2(barW, barH), SpriteEffects.None, 0);
+                // Fill
+                float pct = vis.Hp / 10f;
+                Color hpColor = pct > 0.5f ? Color.Lime : pct > 0.25f ? Color.Orange : Color.Red;
+                _spriteBatch.Draw(_pixel, new Vector2(cx - barW / 2, barY), null,
+                    hpColor, 0, Vector2.Zero, new Vector2(barW * pct, barH), SpriteEffects.None, 0);
+            }
 
-                // ── "You" indicator ──
-                if (isMe && !vis.Dead)
-                {
-                    float ia = 0.3f + 0.15f * MathF.Sin(time * 2);
-                    DrawRectOutline(cx, cy, 1.6f, 1.6f, Color.White * ia, 0.04f);
-                }
+            // ── "You" indicator ──
+            if (isMe && !vis.Dead)
+            {
+                float ia = 0.3f + 0.15f * MathF.Sin(time * 2);
+                DrawRectOutline(cx, cy, 1.6f, 1.6f, Color.White * ia, 0.04f);
             }
         }
     }
