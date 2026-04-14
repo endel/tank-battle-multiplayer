@@ -1,5 +1,7 @@
 # Demo: Realtime Tanks Multiplayer
 
+![Realtime Tanks Demo](sharing.webp)
+
 A multiplayer tank battle game built with [Colyseus](https://colyseus.io/). Multiple frontend implementations share the same authoritative game server.
 
 > Inspired by the [Tanx](http://playcanv.as/p/aP0oxhUr) from [PlayCanvas](https://playcanvas.com/), by [Max M](https://github.com/Maksims) - Original server sources: [cvan/tanx-1](https://github.com/cvan/tanx-1).
